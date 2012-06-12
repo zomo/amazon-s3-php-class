@@ -1458,6 +1458,64 @@ class S3
 		return array();
 	}
 
+	/**
+	* Retrieve info and contents of a given Invalidation in a CloudFront distribution
+	*
+	* http://docs.amazonwebservices.com/AmazonCloudFront/latest/APIReference/GetInvalidation.html
+	* returned array looks like this:
+	*	Array
+	*	(
+	*		'Status'     => 'Completed',
+	*		'CreateTime' => 'CreateTime',
+	*		'Paths'      => ( '/foo', '/var' )
+	*	)
+	*
+	* @param string $distributionId Distribution ID from listDistributions()
+	* @param string $invalidationId Invalidation ID returned by invalidateDistriution()
+	* @return array
+	*/
+	public static function getDistributionInvalidationInfo($distributionId, $invalidationId)
+	{
+		if (!extension_loaded('openssl'))
+		{
+			self::__triggerError(sprintf("S3::getDistributionInvalidationList(): [%s] %s",
+			"CloudFront functionality requires SSL"), __FILE__, __LINE__);
+			return false;
+		}
+
+		$useSSL = self::$useSSL;
+		self::$useSSL = true; // CloudFront requires SSL
+		$rest = new S3Request('GET', '', '2010-11-01/distribution/'.$distributionId.'/invalidation/'.$invalidationId, 'cloudfront.amazonaws.com');
+		$rest = self::__getCloudFrontResponse($rest);
+		self::$useSSL = $useSSL;
+
+		if ($rest->error === false && $rest->code !== 200)
+		{
+			$rest->error = array('code' => $rest->code, 'message' => 'Unexpected HTTP status');
+		}
+		if ($rest->error !== false)
+		{
+			trigger_error(sprintf("S3::getDistributionInvalidationInfo('{$distributionId}','{$invalidationId}'): [%s]",
+			$rest->error['code'], $rest->error['message']), E_USER_WARNING);
+			return false;
+		}
+		elseif ($rest->body instanceof SimpleXMLElement && isset($rest->body->Status))
+		{
+			$result = array();
+			$result['Status'] = $rest->body->Status;
+			$result['CreateTime'] = $rest->body->CreateTime;
+			$paths = array();
+			$batch = $rest->body->InvalidationBatch;
+			foreach ($batch->Path as $path)
+			{
+				array_push($paths, $path);
+			}
+			$result['Paths'] = $paths;
+			return $result;
+		}
+		return false;
+	}
+
 
 	/**
 	* Get a DistributionConfig DOMDocument
