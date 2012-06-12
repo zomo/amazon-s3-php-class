@@ -1380,6 +1380,10 @@ class S3
 			$rest->error['code'], $rest->error['message']), E_USER_WARNING);
 			return false;
 		}
+		if ($rest->body instanceof SimpleXMLElement && isset($rest->body->Id))
+		{
+			return $rest->body->Id;
+		}
 		return true;
 	}
 
